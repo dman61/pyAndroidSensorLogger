@@ -1,55 +1,67 @@
-try:
-	import androidhelper as android
-except:
-	import android
-import datetime
+import androidhelper
 import time
 import json
-import os.path
+import socket
+import datetime
 
-iLoggingInterval=15
-fLog=file("/sdcard/sensorlog.txt","w")
-fLog2=file("/sdcard/sensorlog2.txt","w")
-dSensorReadings={}
+bOutputFile=False
+bSendToServer=True
+bOutputToScreen=False
 
-myDevice=android.Android()
-#myDevice.startSensingThreshold(1,4,7)
-#myDevice.startSensingThreshold(2,4,7)
-#myDevice.startSensingThreshold(3,4,7)
-#print datetime.datetime.utcnow()
-myDevice.startSensingTimed(1,iLoggingInterval*1000)
-#fLog.write("Test")
-#print dir(myDevice.readSensors())
-#print "readsensors"
-#print myDevice.readSensors()
+ServerIP='10.101.1.246'
+ServerPort=13373
 
-#for i in range(10):
-while not os.path.exists ("/sdcard/stop.txt"):
-	'''
-	print "sensorsGetAccuracy"
-	print myDevice.sensorsGetAccuracy()
-	print "sensorsReadAccelerometer"
-	print myDevice.sensorsReadAccelerometer()
-	print "sensorsReadMagnetometer"
-	print myDevice.sensorsReadMagnetometer()
-	print "sensorsReadOrientation"
-	print myDevice.sensorsReadOrientation()
-	'''
-	oSensorAccur= myDevice.sensorsGetAccuracy()
-	oSensorAccel=myDevice.sensorsReadAccelerometer()
-	oSensorMag=myDevice.sensorsReadMagnetometer()
-	oSensorOrient = myDevice.sensorsReadOrientation()
-	dSensorReadings.update(SampleTime=datetime.datetime.now().isoformat(),Accuracy=oSensorAccur.result,Accelerometer=oSensorAccel.result,Magnetometer=oSensorMag.result,Orientation=oSensorOrient.result)
-	jSensors=json.dumps(dSensorReadings)
-	json.dumps(dSensorReadings,fLog)
-	fLog.flush()
-	#print jSensors
-	fLog2.write(jSensors)
-	fLog2.flush()
-	time.sleep(iLoggingInterval)
+if bOutputFile: outfile=open("sensors.log","wb")
 
-	
-myDevice.stopSensing()	
-fLog.close()
-fLog2.close()
-print "Done"
+ah= androidhelper.Android ()
+
+
+while (True):
+  SensorDict={}
+  try:
+    ah.startSensingTimed (1,250)
+  except:
+    print "StartSensing Exception. Sleeping 5 seconds"
+    ah.stopSensing ()
+    time.sleep(5)
+    continue    
+  
+  SensorDict["ReadingTime"] = datetime.datetime.now().isoformat()
+  SensorDict["accelerometer"] = ah.sensorsReadAccelerometer().result
+  SensorDict["magnetometer"] = ah.sensorsReadMagnetometer().result
+  SensorDict["orientation" ] = ah.sensorsReadOrientation().result
+  
+  for key in SensorDict:
+    if bOutputToScreen: print key, SensorDict[key]
+    if bOutputFile: outfile.write(json.dumps(SensorDict))
+  
+  if bSendToServer: 
+    SensorDict["accelerometer"] = ah.sensorsReadAccelerometer().result
+    SensorDict["magnetometer"] = ah.sensorsReadMagnetometer().result
+    SensorDict["orientation" ] = ah.sensorsReadOrientation().result
+    try:
+      s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+      s.connect((ServerIP, ServerPort))
+      s.send(json.dumps(SensorDict))
+      s.close()
+    except:
+      print "Send Failed"
+      time.sleep(2)
+    #result = s.recv(1024)
+  
+    #outfile.write(ah.sensorsGetAccuracy().result)
+    #outfile.write(ah.sensorsReadAccelerometer().result)
+    #outfile.write(ah.sensorsReadMagnetometer().result)
+    #outfile.write(ah.sensorsReadOrientation().result)
+    #outfile.write ("\n")
+  
+  #result = json.loads(s.recv(1024))
+  ah.stopSensing ()
+  #time.sleep (1)
+
+
+if bOutputFile: outfile.close ()
+s.close()
+
+
+
